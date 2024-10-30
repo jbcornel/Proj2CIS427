@@ -88,9 +88,14 @@ class Connection():
         msg = self.s.recv(BUFFER_SIZE).decode()
         print(msg)
 
-        if'200 OK' in msg and 'Logged in successfully' in msg:
+        if'200 OK' in msg and 'Logged in' in msg:
             self.loggedIn = True
             fullMenu()
+        elif'200 OK' in msg and 'Logged out user' in msg:
+            self.loggedIn = False
+            #eventLoop.removeReader(self.s)
+            #self.closeConnection()
+            preLoginMenu()
         else:
 
             if not self.loggedIn:
@@ -98,6 +103,8 @@ class Connection():
             else:
                 fullMenu()
 
+    def closeConnection():
+        print 
 
     def send(self, msg):
         self.s.send(msg)
@@ -144,6 +151,7 @@ def processClient( serverHost, serverPort):
     preLoginMenu()
     inputReader = Input(connection)
     eventLoop = EventLoop()
+
     eventLoop.addReader(connection)
     eventLoop.addReader(inputReader)
     eventLoop.runForever()
