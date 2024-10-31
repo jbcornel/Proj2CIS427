@@ -96,18 +96,30 @@ class Connection():
             #eventLoop.removeReader(self.s)
             #self.closeConnection()
             preLoginMenu()
+        elif 'shutting down' in msg.lower():
+            print("Server is shutting down. Exiting client...")
+            self.closeConnection()
+            sys.exit(0)
         else:
-
             if not self.loggedIn:
                 preLoginMenu()
             else:
                 fullMenu()
 
-    def closeConnection():
-        print 
+    def closeConnection(self):
+        if self.s:
+            print("Closing connection...")
+            self.s.close()  # Close the socket
+            self.s = None 
 
-    def send(self, msg):
-        self.s.send(msg)
+    def send(self, command):
+        try:
+            self.s.send(f"{command}\n".encode())
+            self.onread()  # Process server response
+        except (BrokenPipeError, ConnectionResetError) as e:
+            print("Server closed the connection. Unable to send message.")
+            self.closeConnection()  # Ensure the client socket is closed
+            sys.exit(1)
 
 
 class Input():
@@ -121,9 +133,13 @@ class Input():
         sys.stdout.write("Enter command: ")
         sys.stdout.flush()
 
-        msg = sys.stdin.readline()
-        self.sender.send(msg.encode())
-
+        msg = sys.stdin.readline().strip()  # Read input from stdin
+        if msg:  # Ensure we are sending a non-empty message
+            self.sender.send(msg)  # Send the command to the server
+            if msg.upper() == "QUIT":  # If QUIT command is detected
+                self.sender.closeConnection()  # Close the connection
+                print("Exiting client...")
+                sys.exit(0)
 
 class EventLoop():
 
@@ -139,30 +155,32 @@ class EventLoop():
             self.readers.remove(reader)
     def runForever(self):
         while True:
-            readers, _, _ = select.select(self.readers, [], [])
+            try:
+                readers, _, _ = select.select(self.readers, [], [])
 
-            for reader in readers:
-                reader.onread()
-        
+                for reader in readers:
+                    if reader.fileno() < 0:  # Check if the file descriptor is valid
+                        continue
+                    reader.onread()
+            except Exception as e:
+                print(f"Error in event loop: {str(e)}")
+                break
 def processClient( serverHost, serverPort):
+    connection = Connection(serverHost, serverPort)  # Create a connection instance
+    input_handler = Input(connection)  # Create an input handler for sending commands
 
-    connection = Connection(serverHost, serverPort)
-    #insert this somewhere else later
-    preLoginMenu()
-    inputReader = Input(connection)
-    eventLoop = EventLoop()
+    event_loop = EventLoop()  # Create the event loop
+    event_loop.addReader(connection)  # Add the connection to the event loop
+    event_loop.addReader(input_handler)  # Add the input handler to the event loop
 
-    eventLoop.addReader(connection)
-    eventLoop.addReader(inputReader)
-    eventLoop.runForever()
+    try:
+        preLoginMenu()
+        event_loop.runForever()  # Start the event loop
+    except Exception as e:
+        print(f"Error in processing client: {e}")
+    finally:
+        connection.closeConnection() 
     
-          
-    
-
-           
-
-
-
 if __name__ == '__main__':
     main()
 
@@ -280,49 +298,6 @@ if __name__ == '__main__':
        
        
 
-        
-
-
-# def processCommand(clientSocket, message, loggedIn):
-#         selection = message
-#         print('entering command seq')
-#         print(f'is logged on: {loggedIn} {isLoggedOn}')
-#         if isLoggedOn == True or loggedIn == True:
-#             if selection == '1':
-#                 sendBUY(clientSocket)
-#             elif selection == '2':
-#                 sendSELL(clientSocket)
-#             elif selection == '3':
-#                 sendLIST(clientSocket)
-#             elif selection == '4':
-#                 sendBALANCE(clientSocket)
-#             elif selection == '5':
-#                 #sendDEPOSIT(clientSocket)
-#                 x=10
-#             elif selection == '6':
-#                 #sendLOOKUP(clientSocket)
-#                 x=10
-#             elif selection == '7':
-#                 #sendWHO(clientSocket)
-#                 x=10
-#             elif selection == '8':
-#                 #sendLOGOUT(clientSocket)
-#                 x=10
-#             elif selection == '9':
-#                 sendQUIT(clientSocket)   
-#             elif selection == '10':
-#                 sendSHUTDOWN(clientSocket)
-#             else:
-#                 print('invalid command please try again...\n')
-#         else:
-#             print(selection)
-#             if selection == '1':
-#                 loggedIn = login(clientSocket)
-               
-#             elif selection == '2':
-#                 sendQUIT(clientSocket)
-#             else:
-#                 print('invalid command please try again...\n')
 
 
 # def sendSHUTDOWN(clientSocket):
