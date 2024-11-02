@@ -65,7 +65,7 @@ def startServer():
                         print(f'Connection closed by {readableSocket.getpeername()}')
                         handleQuit(readableSocket)
                     else:
-                        handleClientCommand(readableSocket, msg)
+                        handleClientCommand(readableSocket, msg, serverSocket)
             except OSError as e:
             # Handle socket errors
                 if readableSocket in socketList:
@@ -113,7 +113,7 @@ def handleDisconnect(clientSocket):
     clientSocket.close()
 
 #function takes clientSocket, and the command associated with the socket
-def handleClientCommand(clientSocket, msg):
+def handleClientCommand(clientSocket, msg, serverSocket):
     global socketList
 
     if clientSocket not in socketList:
@@ -157,7 +157,7 @@ def handleClientCommand(clientSocket, msg):
         elif msg.startswith("WHO"):
             handleWho(clientSocket, msg)
         elif msg.startswith("SHUTDOWN"):
-            handleShutdown(clientSocket)
+            handleShutdown(clientSocket, serverSocket)
             print("Server shutting down...")
             exit()
         else:
@@ -456,15 +456,29 @@ def handleWho(clientSocket, msg):
 
     clientSocket.send(response.encode())
 
-def handleShutdown(clientSocket):
-    # Ensure that only a root user can shut down the server
+def handleShutdown(clientSocket, serverSocket):
+
+
     session = userSessions.get(clientSocket)
     if session and session.get('isRoot'):
         print("Shutting down server...")
-        # Implement server shutdown logic, e.g., closing all sockets, etc.
-        for sock in socketList:
-            sock.close()
-        sys.exit(0)  # Exit the server program
+        for clientSocket in list(userSessions.keys()):
+            clientSocket.send('Server is shutting down. Goodbye.'.encode())
+            clientSocket.close()
+            if clientSocket in sockets_list:
+                sockets_list.remove(clientSocket)
+            del userSessions[clientSocket]
+        serverSocket.close()
+        sys.exit(0)
+
+    # # Ensure that only a root user can shut down the server
+    # session = userSessions.get(clientSocket)
+    # if session and session.get('isRoot'):
+    #     print("Shutting down server...")
+    #     # Implement server shutdown logic, e.g., closing all sockets, etc.
+    #     for sock in socketList:
+    #         sock.close()
+    #     sys.exit(0)  # Exit the server program
     else:
         response = '403 Error: Only root users can shut down the server.\n'
         clientSocket.send(response.encode())
