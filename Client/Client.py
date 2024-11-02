@@ -100,6 +100,11 @@ class Connection():
             print("Server is shutting down. Exiting client...")
             self.closeConnection()
             sys.exit(0)
+        elif'200 OK' in msg and 'Farewell' in msg:
+            print('Quitting Pokemon trading app...\n')
+            
+            self.closeConnection()
+            sys.exit(0)
         else:
             if not self.loggedIn:
                 preLoginMenu()

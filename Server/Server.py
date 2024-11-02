@@ -1,3 +1,4 @@
+from http import client
 import socket
 import select
 import threading
@@ -137,11 +138,7 @@ def handleClientCommand(clientSocket, msg, serverSocket):
         elif msg.startswith('QUIT'):
             clientSocket.send('200 OK: Farewell.\n'.encode())
             print(f'Closing connection with clientSocket: {clientSocket.getpeername()}\n')
-            if clientSocket in userSessions:
-                del userSessions[clientSocket]
-            if clientSocket in socketList:
-                socketList.remove(clientSocket)
-                clientSocket.close()
+            handleDisconnect(clientSocket)
         elif msg.startswith("BUY"):
             handleBuy(clientSocket, msg)
         elif msg.startswith("SELL"):
@@ -494,21 +491,9 @@ def handleQuit(clientSocket):
         print(f'Failed to send farewell to {clientSocket.getpeername()}: {str(e)}')
 
     # Clean up user session
-    if clientSocket in userSessions:
-        del userSessions[clientSocket]
+    handleDisconnect(clientSocket)
 
-    # Remove the client socket from the socket list
-    if clientSocket in socketList:
-        socketList.remove(clientSocket)
-
-    # Close the client socket
-    try:
-        clientSocket.close()
-    except OSError:
-        print(f'Error closing socket for {clientSocket.getpeername()} (it may already be closed).')
-
-    print(f'Closed connection with {clientSocket.getpeername()}')
-
+    
 if __name__ == '__main__':
 
     dbConnection = sqlite3.connect('pokemonTrade.db', check_same_thread=False)
