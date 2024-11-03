@@ -59,11 +59,11 @@ def startServer():
                     socketList.append(clientSocket)
                 #add default user data for the new connected user
                     userSessions[clientSocket] = {'loggedIn': False, 'username': None, 'userID': None}
-                    print(f'New Connection from {clientAddress}')
+                    print(f'New Connection from {clientAddress}...')
                 else:
                     msg = readableSocket.recv(BUFFER_SIZE).decode().strip()
                     if not msg:
-                        print(f'Connection closed by {readableSocket.getpeername()}')
+                        print(f'Connection closed by {readableSocket.getpeername()}...')
                         handleQuit(readableSocket)
                     else:
                         handleClientCommand(readableSocket, msg, serverSocket)
@@ -155,8 +155,6 @@ def handleClientCommand(clientSocket, msg, serverSocket):
             handleWho(clientSocket, msg)
         elif msg.startswith("SHUTDOWN"):
             handleShutdown(clientSocket, serverSocket)
-            print("Server shutting down...")
-            exit()
         else:
             clientSocket.send(f'400 Error: Unknown command received {msg}\n'.encode())
 
@@ -230,7 +228,7 @@ def handleBuy(clientSocket, msg):
                 if not user:
                     return "404 User does not exist\n"
                 if user:
-                #Gets the balance for respecive user and executes transaction
+                #Gets the balance for respective user and executes transaction
                     user_balance = user[0]
                     total_cost = price * count
 
@@ -363,7 +361,7 @@ def handleLookup(clientSocket, msg):
 def handleDeposit(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
-        clientSocket.send("401 Error: You must be logged in to make  deposits\n".encode())
+        clientSocket.send("401 Error: You must be logged in to make deposits\n".encode())
         return
     
     with dbLock:
@@ -377,7 +375,7 @@ def handleDeposit(clientSocket, msg):
                 user = cursor.fetchone()
                 
                 if user:
-                #Gets the balance for respecive user and executes transaction
+                #Gets the balance for respective user and executes transaction
                     user_balance = user[0]
                     total_balance = amount + user_balance
 
@@ -396,7 +394,7 @@ def handleList(clientSocket):
     
     # Check if the user is logged in
     if not session or not session['loggedIn']:
-        clientSocket.send("401 Error: You must be logged in to list cards\n".encode())
+        clientSocket.send("401 Error: You must be logged in to list cards...\n".encode())
         return
 
     with dbLock:
@@ -426,7 +424,7 @@ def handleList(clientSocket):
             print(f'List sent to {clientSocket.getpeername()}')
             
         except Exception as e:
-            error_response = f"500 Error: An error occurred while fetching records. {str(e)}\n"
+            error_response = f"500 Error: An error occurred while fetching records... {str(e)}\n"
             clientSocket.send(error_response.encode())
 
 
@@ -455,30 +453,42 @@ def handleWho(clientSocket, msg):
 
 def handleShutdown(clientSocket, serverSocket):
 
+    #get user session data
+    session = userSessions[clientSocket]
 
-    session = userSessions.get(clientSocket)
-    if session and session.get('isRoot'):
-        print("Shutting down server...")
-        for clientSocket in list(userSessions.keys()):
-            clientSocket.send('Server is shutting down. Goodbye.'.encode())
-            clientSocket.close()
-            if clientSocket in sockets_list:
-                sockets_list.remove(clientSocket)
-            del userSessions[clientSocket]
-        serverSocket.close()
-        sys.exit(0)
-
-    # # Ensure that only a root user can shut down the server
-    # session = userSessions.get(clientSocket)
-    # if session and session.get('isRoot'):
-    #     print("Shutting down server...")
-    #     # Implement server shutdown logic, e.g., closing all sockets, etc.
-    #     for sock in socketList:
-    #         sock.close()
-    #     sys.exit(0)  # Exit the server program
+    if session:
+        #get root value from user sessions
+            is_root = session.get("isRoot")
+            
+            
+            #if the user is not root user, send error response
+            if is_root == 0:
+                response = '401 Error: Only root users can shut down the server...\n'
+                
+                print(response+'\n')
+                clientSocket.send(response.encode())
+                return
+            elif is_root == 1:
+                #if the user is the root user, shut down all client sockets, server socket, remove user sessions and shutdown server
+                print("Shutting down server...")
+                for clientSocket in list(userSessions.keys()):
+                    clientSocket.send('200 OK: Server is shutting down. Goodbye...'.encode())
+                    clientSocket.close()
+                    if clientSocket in sockets_list:
+                        sockets_list.remove(clientSocket)
+                    del userSessions[clientSocket]
+                serverSocket.close()
+                sys.exit(0)
+            else:
+                #in case conditional evaluates an error/none for root value
+                response = '401 Error: Only root user can shut down the server...\n'
+                clientSocket.send(response.encode())
+                return
     else:
-        response = '403 Error: Only root users can shut down the server.\n'
-        clientSocket.send(response.encode())
+            #in case conditional evaluates an error/none for root value
+            response = '401 Error: Only root user can shut down the server...\n'
+            clientSocket.send(response.encode())
+            return
 
 def handleQuit(clientSocket):
     # Attempt to send farewell message
@@ -490,15 +500,15 @@ def handleQuit(clientSocket):
         # Handle the case where the socket is already closed
         print(f'Failed to send farewell to {clientSocket.getpeername()}: {str(e)}')
 
-    # Clean up user session
+    # Clean up user session and disconnect client
     handleDisconnect(clientSocket)
 
     
 if __name__ == '__main__':
-
+    #establish database connection
     dbConnection = sqlite3.connect('pokemonTrade.db', check_same_thread=False)
     cursor = dbConnection.cursor()
-
+    #insert default database entries if they do not already exist
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Users (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
