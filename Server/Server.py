@@ -231,21 +231,19 @@ def handleBuy(clientSocket, msg):
                 #Gets the balance for respective user and executes transaction
                     user_balance = user[0]
                     total_cost = price * count
-
                     # Check if the user has enough balance
                     if user_balance < total_cost:
-                        return "402 Not enough balance\n"
-
+                        response = ("402 Not enough balance\n")
+                    else:
                     #Subtract cost of new cards and add card to users record
-                    new_balance = user_balance - total_cost
-                    cursor.execute("UPDATE Users SET usdbalance=? WHERE ID=?", (new_balance, ownerID))
-                    cursor.execute("INSERT INTO PokemonCards (cardName, cardType, rarity, count, ownerID) VALUES (?, ?, ?, ?, ?)",
-                   (cardName, cardType, rarity, count, ownerID))
+                        new_balance = user_balance - total_cost
+                        cursor.execute("UPDATE Users SET usdbalance=? WHERE ID=?", (new_balance, ownerID))
+                        cursor.execute("INSERT INTO PokemonCards (cardName, cardType, rarity, count, ownerID) VALUES (?, ?, ?, ?, ?)",
+                        (cardName, cardType, rarity, count, ownerID))
                     
-                    response = f"200 OK\nBOUGHT: New balance: {count} {cardName}. User USD balance ${new_balance:.2f}\n"
-                    print(f'Balance updated')
-                else:
-                    response = '401 Error: invalid balance...\n'
+                        response = f"200 OK\nBOUGHT: New balance: {count} {cardName}. User USD balance ${new_balance:.2f}\n"
+                        print(f'Balance updated')
+
             except ValueError:
                 response = '403 Message format error...\n'
             clientSocket.send(response.encode())
@@ -276,23 +274,23 @@ def handleSell(clientSocket, msg):
                     cursor.execute("SELECT count FROM PokemonCards WHERE cardName=? AND ownerID=?", (cardName, ownerID))
                     card = cursor.fetchone()
                     if not card or card[0] < count:
-                        return "404 Not enough cards to sell or card does not exist\n"
-                    
-                    sale_value = price * count
-                    cursor.execute("UPDATE Users SET usdBalance = usdBalance + ? WHERE ID = ?", (sale_value, ownerID))
-                    new_count = card[0] - count
-
-                    if new_count == 0:
-                        cursor.execute("DELETE FROM PokemonCards WHERE cardName=? AND ownerID=?", (cardName, (ownerID)))
+                        response =  "404 Not enough cards to sell or card does not exist\n"
                     else:
-                        cursor.execute("UPDATE PokemonCards SET count=? WHERE cardName=? AND ownerID=?", (new_count, cardName, ownerID))
+                        sale_value = price * count
+                        cursor.execute("UPDATE Users SET usdBalance = usdBalance + ? WHERE ID = ?", (sale_value, ownerID))
+                        new_count = card[0] - count
 
-                    cursor.execute("SELECT usdBalance FROM Users WHERE ID = ?", (ownerID,))
-                    user = cursor.fetchone()
-                    new_balance = user[0]
+                        if new_count == 0:
+                            cursor.execute("DELETE FROM PokemonCards WHERE cardName=? AND ownerID=?", (cardName, (ownerID)))
+                        else:
+                            cursor.execute("UPDATE PokemonCards SET count=? WHERE cardName=? AND ownerID=?", (new_count, cardName, ownerID))
+
+                        cursor.execute("SELECT usdBalance FROM Users WHERE ID = ?", (ownerID,))
+                        user = cursor.fetchone()
+                        new_balance = user[0]
                     
-                    response = f"200 OK\nBOUGHT: New balance: {count} {cardName}. User USD balance ${new_balance:.2f}\n"
-                    print(f'Balance updated')
+                        response = f"200 OK\nSOLD: {count} {cardName}. User USD balance ${new_balance:.2f}\n"
+                        print(f'Balance updated')
                 else:
                     response = '401 Error: invalid balance...\n'
             except ValueError:
@@ -336,16 +334,22 @@ def handleLookup(clientSocket, msg):
             ownerID = session['userID']
             
             # Use SQL LIKE for partial matching (case-insensitive with COLLATE NOCASE)
-            cursor.execute("SELECT * FROM PokemonCards WHERE cardName LIKE ? AND ownerID = ? COLLATE NOCASE", 
-                           (f"%{cardName}%", ownerID))
+            
+            cursor.execute("SELECT * FROM PokemonCards WHERE cardName LIKE ? OR cardType LIKE ? AND ownerID = ? COLLATE NOCASE", 
+                           (f"%{cardName}%", f"%{cardName}%", ownerID))
+            
             cards = cursor.fetchall()
+            cursor.execute("SELECT userName FROM Users WHERE ID = ?",(ownerID,))
+            user = cursor.fetchone()
+
+            userName = user[0]
 
             # Check if there are matched records
             if cards:
                 # Construct success response with matched records
                 response = "200 OK\nMatch(s) Found:\nID\tCard Name\tType\tRarity\tCount\tOwner_id\n"
                 for card in cards:
-                    response += f"{card[0]}\t{card[1]}\t{card[2]}\t{card[3]}\t{card[4]}\t{card[5]}\n"
+                    response += f"{card[0]}\t{card[1]}\t{card[2]}\t{card[3]}\t{card[4]}\t{userName}\n"
                 print('Match(es) found:', cards)
             else:
                 # No matches found
@@ -408,6 +412,8 @@ def handleList(clientSocket):
                 cursor.execute("SELECT * FROM PokemonCards WHERE ownerID=?", (ownerID,))
                 
             cards = cursor.fetchall()
+
+            
             
             # Prepare the response
             response = "200 OK\n"
@@ -416,7 +422,10 @@ def handleList(clientSocket):
             
             if cards:
                 for card in cards:
-                    response += f"{card[0]}\t{card[1]}\t{card[2]}\t{card[3]}\t{card[4]}\t{card[5]}\n"
+                    cursor.execute("SELECT userName FROM Users WHERE ID = ?", (card[5],))
+                    user = cursor.fetchone()
+                    userName = user[0]
+                    response += f"{card[0]}\t{card[1]}\t{card[2]}\t{card[3]}\t{card[4]}\t{userName}\n"
             else:
                 response += "No records found.\n"
 
@@ -536,11 +545,13 @@ if __name__ == '__main__':
     result = cursor.fetchone()
     if result and result[0] == 0:
         cursor.execute("INSERT INTO Users (email, firstName, lastName, userName, password, usdBalance, isRoot) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ('admin@pokemontrade.com', 'Admin', 'User', 'admin', 'adminpassword', 1000.0, 1))
+                       ('root@pokemontrade.com', 'Root', 'User', 'root', 'root01', 100.0, 1))
         cursor.execute("INSERT INTO Users (email, firstName, lastName, userName, password, usdBalance, isRoot) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ('john.doe@example.com', 'John', 'Doe', 'johndoe', 'password123', 500.0, 0))
+                       ('john@example.com', 'John', 'Doe', 'john', 'john01', 50.0, 0))
         cursor.execute("INSERT INTO Users (email, firstName, lastName, userName, password, usdBalance, isRoot) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ('jane.smith@example.com', 'Jane', 'Smith', 'janesmith', 'mypassword', 750.0, 0))
+                       ('mary@example.com', 'Mary', 'Smith', 'mary', 'mary01', 75.0, 0))
+        cursor.execute("INSERT INTO Users (email, firstName, lastName, userName, password, usdBalance, isRoot) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       ('moe@example.com', 'Moe', 'Smart', 'moe', 'moe01', 25.0, 0))
         dbConnection.commit()
 
     # Insert default pokemon cards if not already present
@@ -553,6 +564,7 @@ if __name__ == '__main__':
                        ('Charizard', 'Fire', 'Rare', 2, 2))
         cursor.execute("INSERT INTO PokemonCards (cardName, cardType, rarity, count, ownerID) VALUES (?, ?, ?, ?, ?)",
                        ('Bulbasaur', 'Grass', 'Common', 5, 3))
+
         dbConnection.commit()
 
 
