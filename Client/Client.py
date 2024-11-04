@@ -5,7 +5,7 @@ import select
 import threading
 BUFFER_SIZE = 4096
 
-def fullMenu():
+def mainMenu():
 
     print('''
     ----- POKEMON TRADING APP -----
@@ -31,7 +31,7 @@ def fullMenu():
 
 
 
-def preLoginMenu():
+def loginMenu():
 
     print('''
     ----- POKEMON TRADING APP -----
@@ -81,30 +81,30 @@ class Connection():
         #process login command
         if'200 OK' in msg and 'Logged in' in msg:
             self.loggedIn = True
-            fullMenu()
+            mainMenu()
         elif'200 OK' in msg and 'Logged out user' in msg:
             self.loggedIn = False   #process logging out.
-            preLoginMenu()
+            loginMenu()
         elif 'shutting down' in msg.lower():
             print("Server is shutting down. Exiting client...")
             self.closeConnection() #process shutting down the server if response is valid
             sys.exit(0)
         elif'200 OK' in msg and 'Farewell' in msg:
-            print('Quitting Pokemon trading app...\n')          #if client chooses to commit close socket and connection to server
+            print('Quitting Pokemon trading app...\n') #if client chooses to commit close socket and connection to server
 
             self.closeConnection()
             sys.exit(0)
         elif '401 Error' in msg: #if response results in error print the response
             print(msg + '\n')
             if not self.loggedIn:
-                preLoginMenu()
+                loginMenu()
             else:
-                fullMenu()
+                mainMenu()
         else:
             if not self.loggedIn:   
-                preLoginMenu()
+                loginMenu()
             else:
-                fullMenu()
+                mainMenu()
 
 
     def closeConnection(self):
@@ -134,11 +134,11 @@ class Input():
         sys.stdout.write("Enter command: ")
         sys.stdout.flush()
 
-        msg = sys.stdin.readline().strip()  # Read input from stdin
-        if msg:  # Ensure we are sending a non-empty message
-            self.sender.send(msg)  # Send the command to the server
-            if msg.upper() == "QUIT":  # If QUIT command is detected
-                self.sender.closeConnection()  # Close the connection
+        msg = sys.stdin.readline().strip() 
+        if msg:  
+            self.sender.send(msg) 
+            if msg.upper() == "QUIT": 
+                self.sender.closeConnection() 
                 print("Exiting client...")
                 sys.exit(0)
 
@@ -162,7 +162,7 @@ class EventLoop():
                 readers, _, _ = select.select(self.readers, [], [])
 
                 for reader in readers:
-                    if reader.fileno() < 0:  # Check if the file descriptor is valid
+                    if reader.fileno() < 0: 
                         continue
                     reader.onread()
             except Exception as e:
@@ -171,15 +171,15 @@ class EventLoop():
 
     #initialize connection to server and add socket to event loop list/ this loop will monitor for input/response simultaneously
 def processClient( serverHost, serverPort):
-    connection = Connection(serverHost, serverPort)  # Create a connection instance
-    input_handler = Input(connection)  # Create an input handler for sending commands
+    connection = Connection(serverHost, serverPort)
+    input_handler = Input(connection)
 
-    event_loop = EventLoop()  # Create the event loop
-    event_loop.addReader(connection)  # Add the connection to the event loop
-    event_loop.addReader(input_handler)  # Add the input handler to the event loop
+    event_loop = EventLoop()
+    event_loop.addReader(connection) 
+    event_loop.addReader(input_handler)
 
     try:
-        preLoginMenu()
+        loginMenu()
         event_loop.runForever()  # Start the event loop
     except Exception as e:
         print(f"Error in processing client: {e}")
