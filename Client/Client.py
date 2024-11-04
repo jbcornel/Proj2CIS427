@@ -12,12 +12,12 @@ def fullMenu():
     
     --- commands and parameters ---
 
-        1. BUY
-        2. SELL
+        1. BUY <CardName> <CardType> <Rarity> <Price> <Quantity>
+        2. SELL <CardName> <Quantity> <Price>
         3. LIST
         4. BALANCE
-        5. DEPOSIT
-        6. LOOKUP
+        5. DEPOSIT <amount>
+        6. LOOKUP <CardName> OR <CardType>
         7. WHO (root only)
         8. LOGOUT
         9. QUIT
@@ -38,7 +38,7 @@ def preLoginMenu():
     
     --- commands and parameters ---
 
-        1. LOGIN
+        1. LOGIN <Username> <Password>
         2. QUIT
 
        ''')
