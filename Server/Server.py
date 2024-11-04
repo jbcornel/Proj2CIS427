@@ -53,7 +53,7 @@ def startServer():
             #need to initialize the connection with a new socket for the user to use to communicate with the server
             try:
                 if readableSocket == serverSocket:
-                #create new so
+                #create new socket
                     clientSocket, clientAddress = serverSocket.accept()
 
                     socketList.append(clientSocket)
@@ -64,48 +64,20 @@ def startServer():
                     msg = readableSocket.recv(BUFFER_SIZE).decode().strip()
                     if not msg:
                         print(f'Connection closed by {readableSocket.getpeername()}...')
-                        handleQuit(readableSocket)
+                        quit(readableSocket)
                     else:
-                        handleClientCommand(readableSocket, msg, serverSocket)
+                        clientCommand(readableSocket, msg, serverSocket)
             except OSError as e:
             # Handle socket errors
                 if readableSocket in socketList:
                     print(f'Error handling message from {readableSocket}: {str(e)}')
-                    handleQuit(readableSocket)
-  #          else:
-                    #else the socket that was ready to be read was a clientSocket aka the client had sent a command
-                    #and it is ready to be processed in the buffer
- #               try:
-                    
- #                   msg = readableSocket.recv(BUFFER_SIZE).decode().strip()
- #                   #if there is no message present in the socket then the connection was closed by the client 
- #                   if not msg:
- #                       
- #                       print(f'Connection closed by {readableSocket.getpeername()}')
- #                       #remove user session/socket data
- #                       if readableSocket in socketList:
- #                           socketList.remove(readableSocket)
-#                        if readableSocket in userSessions:
-#                            del userSessions[readableSocket]  
-#                        readableSocket.close()
-#                    else:
-#                        # Process client command
-#                        handleClientCommand(readableSocket, msg)
-#                except Exception as e:
-#                    #processing client request resulted in error, remove the client and close the connection
-#                    print(f'Error handling message from {readableSocket.getpeername()}: {str(e)}\n')
-#                    if readableSocket in socketList:
-#                            socketList.remove(readableSocket)
-#                    if readableSocket in userSessions:
-#                           del userSessions[readableSocket]  # Remove session for disconnected socket
-#                    readableSocket.close()
-
+                    quit(readableSocket)
 
 #create global variable to keep track of monitored sockets for the server and initialize with server socket
 global sockets_list
 sockets_list = []
-
-def handleDisconnect(clientSocket):
+#disconnets the client socket from the server socket
+def disconnect(clientSocket):
     print(f'Connection closed by {clientSocket.getpeername()}')
     if clientSocket in socketList:
         socketList.remove(clientSocket)
@@ -114,7 +86,7 @@ def handleDisconnect(clientSocket):
     clientSocket.close()
 
 #function takes clientSocket, and the command associated with the socket
-def handleClientCommand(clientSocket, msg, serverSocket):
+def clientCommand(clientSocket, msg, serverSocket):
     global socketList
 
     if clientSocket not in socketList:
@@ -125,46 +97,46 @@ def handleClientCommand(clientSocket, msg, serverSocket):
         print(f'Received from {clientSocket.getpeername()}: {msg}')
 
         if msg.startswith('QUIT'):
-            handleQuit(clientSocket)
+            quit(clientSocket)
             return
 
     #conditional statement to decide which command was requested based on message
     #parameters are sent to functions and response is configured and sent and completed in
     # processing functions
         if msg.startswith('LOGIN'):
-            handleLOGIN(clientSocket, msg)
+            LOGIN(clientSocket, msg)
         elif msg.startswith('LOGOUT'):
-            handleLOGOUT(clientSocket)
+            LOGOUT(clientSocket)
         elif msg.startswith('QUIT'):
             clientSocket.send('200 OK: Farewell.\n'.encode())
             print(f'Closing connection with clientSocket: {clientSocket.getpeername()}\n')
-            handleDisconnect(clientSocket)
+            disconnect(clientSocket)
         elif msg.startswith("BUY"):
-            handleBuy(clientSocket, msg)
+            buy(clientSocket, msg)
         elif msg.startswith("SELL"):
-            handleSell(clientSocket, msg)
+            sell(clientSocket, msg)
         elif msg.startswith("BALANCE"):
-            handleBalance(clientSocket, msg)
+            balance(clientSocket, msg)
         elif msg.startswith("LIST"):
-            handleList(clientSocket)
+            List(clientSocket)
         elif msg.startswith("LOOKUP"):
-            handleLookup(clientSocket, msg)
+            Lookup(clientSocket, msg)
         elif msg.startswith("DEPOSIT"):
-            handleDeposit(clientSocket, msg)
+            deposit(clientSocket, msg)
         elif msg.startswith("WHO"):
-            handleWho(clientSocket, msg)
+            who(clientSocket, msg)
         elif msg.startswith("SHUTDOWN"):
-            handleShutdown(clientSocket, serverSocket)
+            shutdown(clientSocket, serverSocket)
         else:
             clientSocket.send(f'400 Error: Unknown command received {msg}\n'.encode())
 
     except OSError as e:
         print(f'Error handling message from {clientSocket}: {str(e)}')
-        handleQuit(clientSocket)
+        quit(clientSocket)
 
 #login functions checks LOGIN credentials with entries in the database, if they match then start new thread,
 #change user session data for user
-def handleLOGIN(clientSocket, msg):
+def LOGIN(clientSocket, msg):
 
     with dbLock:
         try:
@@ -195,7 +167,7 @@ def handleLOGIN(clientSocket, msg):
 
 #login function checks if user is currently logged in and if they are logs them out, then closes
 #the connection for the client socket
-def handleLOGOUT(clientSocket):
+def LOGOUT(clientSocket):
 
     if clientSocket in userSessions and userSessions[clientSocket]['loggedIn']:
         username = userSessions[clientSocket]['userName']
@@ -208,7 +180,9 @@ def handleLOGOUT(clientSocket):
     
     clientSocket.send(response.encode())
 
-def handleBuy(clientSocket, msg):
+#buy function checks if user is logged in and allows the user to buy Pokemon Cards
+#also checks for errors, such as not enough balance
+def buy(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
         clientSocket.send("401 Error: You must be logged in to buy cards\n".encode())
@@ -248,7 +222,9 @@ def handleBuy(clientSocket, msg):
                 response = '403 Message format error...\n'
             clientSocket.send(response.encode())
 
-def handleSell(clientSocket, msg):
+#Sell function checks if user is logged in and allows the user to sell Pokemon Cards
+#also checks for errors, such as not enough cards
+def sell(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
         clientSocket.send("401 Error: You must be logged in to sell cards\n".encode())
@@ -297,7 +273,8 @@ def handleSell(clientSocket, msg):
                 response = '403 Message format error...\n'
             clientSocket.send(response.encode())
 
-def handleBalance(clientSocket, msg):
+#balance function checks if user is logged in and allows the user to check their balance
+def balance(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
         clientSocket.send("401 Error: You must be logged in to check balance\n".encode())
@@ -321,7 +298,9 @@ def handleBalance(clientSocket, msg):
                 response = '403 Message format error...\n'
             clientSocket.send(response.encode())
 
-def handleLookup(clientSocket, msg):
+#Lookup function checks if user is logged in and allows the user to lookup Pokemon Cards
+#by their name or type, and checks if no cards are found
+def Lookup(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
         clientSocket.send("401 Error: You must be logged in to lookup cards\n".encode())
@@ -361,8 +340,8 @@ def handleLookup(clientSocket, msg):
 
     clientSocket.send(response.encode())
 
-
-def handleDeposit(clientSocket, msg):
+#deposit function checks if user is logged in and allows the user to deposit money into their account
+def deposit(clientSocket, msg):
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
         clientSocket.send("401 Error: You must be logged in to make deposits\n".encode())
@@ -393,7 +372,9 @@ def handleDeposit(clientSocket, msg):
                 response = '403 Message format error...\n'
             clientSocket.send(response.encode())
 
-def handleList(clientSocket):
+#List function checks if user is logged in and root, if root gives full database list
+#if user not root, it only lists that users cards
+def List(clientSocket):
     session = userSessions.get(clientSocket)
     
     # Check if the user is logged in
@@ -436,8 +417,8 @@ def handleList(clientSocket):
             error_response = f"500 Error: An error occurred while fetching records... {str(e)}\n"
             clientSocket.send(error_response.encode())
 
-
-def handleWho(clientSocket, msg):
+#who function checks if user is root and gives a list of active client users
+def who(clientSocket, msg):
     # Retrieve the user session for the current client
     session = userSessions.get(clientSocket)
     if not session or not session['loggedIn']:
@@ -460,7 +441,9 @@ def handleWho(clientSocket, msg):
 
     clientSocket.send(response.encode())
 
-def handleShutdown(clientSocket, serverSocket):
+#shutdown function checks if user is root and if they are, it allows the user to shutdown
+#the server and all open client sockets
+def shutdown(clientSocket, serverSocket):
 
     #get user session data
     session = userSessions[clientSocket]
@@ -499,7 +482,9 @@ def handleShutdown(clientSocket, serverSocket):
             clientSocket.send(response.encode())
             return
 
-def handleQuit(clientSocket):
+#Quit function allows any user to shut down their respective client and close the socket/client
+#connection
+def quit(clientSocket):
     # Attempt to send farewell message
     response = '200 OK: Farewell.\n'
     try:
@@ -510,7 +495,7 @@ def handleQuit(clientSocket):
         print(f'Failed to send farewell to {clientSocket.getpeername()}: {str(e)}')
 
     # Clean up user session and disconnect client
-    handleDisconnect(clientSocket)
+    disconnect(clientSocket)
 
     
 if __name__ == '__main__':
